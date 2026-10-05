@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>emh People Finder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one column — search + view switch, then either a person (manager trail, details, team) or the whole organisation as a collapsible tree. */
+:root{
+  --bg:#f5f7f6; --surface:#ffffff; --line:#dbe3e0; --fg:#18231f; --muted:#5b6b65;
+  --accent:#0f6b5c; --accent-soft:#e2f0ec; --accent-fg:#ffffff; --mark:#fff1b8; --warn:#9a5b00; --warn-soft:#fbefd9;
+  --body:"Hanken Grotesk",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#111816; --surface:#18211e; --line:#2a3632; --fg:#e6eeeb; --muted:#93a39d;
+  --accent:#4cc3aa; --accent-soft:#1d332d; --accent-fg:#0b1311; --mark:#5a4d12; --warn:#f0b65a; --warn-soft:#3a2c14; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111816; --surface:#18211e; --line:#2a3632; --fg:#e6eeeb; --muted:#93a39d;
+  --accent:#4cc3aa; --accent-soft:#1d332d; --accent-fg:#0b1311; --mark:#5a4d12; --warn:#f0b65a; --warn-soft:#3a2c14; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.5}
+.wrap{max-width:960px;margin:0 auto;padding:24px 16px 48px;display:flex;flex-direction:column;gap:24px}
+.wrap.wide{max-width:1280px}
+header{display:flex;flex-direction:column;gap:14px}
+.top{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px}
+h1{font-size:1.35rem;margin:0;font-weight:700;letter-spacing:-.01em}
+.pill{font-family:var(--mono);font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:2px 10px}
+.who{margin-left:auto;font-size:.85rem;color:var(--muted)}
+.bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.search{position:relative;flex:1 1 300px;min-width:0}
+.search input{width:100%;font:inherit;font-size:1rem;padding:11px 44px 11px 14px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--fg)}
+.search input:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:transparent}
+.kbd{position:absolute;right:12px;top:50%;transform:translateY(-50%);font-family:var(--mono);font-size:.75rem;color:var(--muted);border:1px solid var(--line);border-radius:5px;padding:0 6px}
+.results{position:absolute;left:0;right:0;top:calc(100% + 6px);background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,.14);max-height:min(420px,60vh);overflow:auto;z-index:10;padding:6px;margin:0;list-style:none}
+.results li{display:flex;gap:12px;align-items:center;padding:8px 10px;border-radius:8px;cursor:pointer}
+.results li[aria-selected="true"],.results li:hover{background:var(--accent-soft)}
+.results .meta{min-width:0}
+.results .n{font-weight:600}
+.results .r{color:var(--muted);font-size:.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.results .empty{color:var(--muted);padding:12px;cursor:default}
+mark{background:var(--mark);color:inherit;border-radius:2px}
+.btn{font:inherit;font-weight:500;font-size:.92rem;padding:10px 14px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--fg);cursor:pointer;white-space:nowrap}
+.btn:hover{border-color:var(--accent)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--surface)}
+.seg button{font:inherit;font-weight:500;font-size:.92rem;padding:10px 14px;border:0;background:none;color:var(--muted);cursor:pointer;white-space:nowrap}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-fg)}
+.trail{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;font-size:.88rem;color:var(--muted)}
+.trail button{font:inherit;color:var(--accent);background:none;border:0;padding:2px 4px;border-radius:4px;cursor:pointer}
+.trail button:hover{text-decoration:underline}
+.trail .sep{opacity:.6}
+.focus{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:24px;display:grid;grid-template-columns:auto 1fr;gap:20px;align-items:start}
+.av{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;font-weight:600;font-size:.9rem;background:var(--accent-soft);color:var(--accent);flex:none}
+.focus .av{width:72px;height:72px;font-size:1.4rem;background:var(--accent);color:var(--accent-fg)}
+.focus h2{margin:0;font-size:1.6rem;line-height:1.2;text-wrap:balance}
+.focus .role{font-size:1.05rem;margin-top:2px}
+.you{font-family:var(--mono);font-size:.68rem;text-transform:uppercase;letter-spacing:.08em;background:var(--accent-soft);color:var(--accent);border-radius:999px;padding:2px 8px;vertical-align:middle;margin-left:8px}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px 24px;margin:18px 0 0;padding:0}
+.facts div{min-width:0}
+.facts dt{font-family:var(--mono);font-size:.68rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.facts dd{margin:2px 0 0;overflow-wrap:anywhere}
+.facts dd button{font:inherit;color:var(--accent);background:none;border:0;padding:0;cursor:pointer;text-align:left}
+.copy{font-family:var(--mono);font-size:.7rem;margin-left:8px;border:1px solid var(--line);background:none;color:var(--muted);border-radius:5px;padding:0 6px;cursor:pointer}
+.focus .info{min-width:0}
+section h3{font-size:.75rem;font-family:var(--mono);font-weight:500;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin:0 0 10px;display:flex;gap:8px}
+section h3 span{color:var(--fg)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}
+.card{display:flex;gap:12px;align-items:center;text-align:left;font:inherit;color:inherit;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px;cursor:pointer;width:100%}
+.card:hover{border-color:var(--accent)}
+.card .meta{min-width:0;flex:1}
+.card .n{font-weight:600}
+.card .r{color:var(--muted);font-size:.85rem}
+.cnt{font-family:var(--mono);font-size:.72rem;color:var(--accent);background:var(--accent-soft);border-radius:999px;padding:1px 8px;white-space:nowrap}
+.none{color:var(--muted);font-size:.9rem}
+.msg{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:24px;color:var(--muted)}
+
+/* Tree */
+.treebar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.treebar .note{color:var(--muted);font-size:.88rem;margin-left:auto}
+.treebox{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 16px 16px 8px;overflow-x:auto}
+.tree,.tree ul{list-style:none;margin:0;padding:0}
+.tree ul{margin-left:19px;padding-left:12px;border-left:1px solid var(--line)}
+.tree summary{list-style:none;cursor:pointer}
+.tree summary::-webkit-details-marker{display:none}
+.row{display:flex;align-items:center;gap:8px;padding:3px 6px;border-radius:8px;min-height:36px}
+.row:hover{background:var(--accent-soft)}
+.chev{width:22px;height:22px;display:grid;place-items:center;color:var(--muted);flex:none;transition:transform .15s}
+details[open]>summary .chev{transform:rotate(90deg)}
+.leafpad{width:22px;flex:none}
+.tn{font:inherit;font-weight:600;color:var(--fg);background:none;border:0;padding:0;cursor:pointer;text-align:left;white-space:nowrap}
+.tn:hover{color:var(--accent);text-decoration:underline}
+.tt{color:var(--muted);font-size:.88rem;white-space:nowrap}
+.row.hit{background:var(--mark)}
+.row.me .tn::after{content:"You";font-family:var(--mono);font-size:.62rem;text-transform:uppercase;letter-spacing:.08em;background:var(--accent-soft);color:var(--accent);border-radius:999px;padding:1px 6px;margin-left:6px;vertical-align:2px}
+.orphans{margin-top:16px;padding-top:12px;border-top:1px dashed var(--line)}
+.orphans .head{display:flex;gap:8px;align-items:center;font-size:.88rem;color:var(--warn);background:var(--warn-soft);border-radius:8px;padding:6px 10px;margin:0 0 6px 8px}
+
+button:focus-visible,.card:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+footer{font-size:.8rem;color:var(--muted)}
+@media (max-width:520px){.focus{grid-template-columns:1fr}.focus h2{font-size:1.35rem}.tt{display:none}}
+@media (prefers-reduced-motion:reduce){.chev{transition:none}}
+</style>
+
+<style>html{color-scheme:light}body{margin:0}[hidden]{display:none!important}</style>
+</head>
+<body>
+<div class="wrap" id="wrap">
+  <header>
+    <div class="top">
+      <h1>People Finder</h1>
+      <span class="pill" id="samplePill" hidden>Sample data</span>
+      <span class="who" id="who"></span>
+    </div>
+    <div class="bar">
+      <div class="search" role="combobox" aria-expanded="false" aria-haspopup="listbox" id="combo">
+        <input id="q" type="search" autocomplete="off" placeholder="Search by name, role or team" aria-label="Search people" aria-controls="results">
+        <span class="kbd" aria-hidden="true">/</span>
+        <ul class="results" id="results" role="listbox" hidden></ul>
+      </div>
+      <button class="btn" id="meBtn" disabled>My position</button>
+      <div class="seg" role="group" aria-label="View">
+        <button id="vPerson" aria-pressed="true">Person</button>
+        <button id="vTree" aria-pressed="false">Whole organisation</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="personView">
+    <div style="display:flex;flex-direction:column;gap:24px">
+      <nav class="trail" id="trail" aria-label="Reporting line"></nav>
+      <article class="focus" id="focus" aria-live="polite"><p class="none">Loading people…</p></article>
+      <section id="reportsSec"><h3>Direct reports <span id="rc"></span></h3><div class="grid" id="reports"></div></section>
+      <section id="peersSec" hidden><h3>Same team <span id="pc"></span></h3><div class="grid" id="peers"></div></section>
+    </div>
+  </main>
+
+  <main id="treeView" hidden>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div class="treebar">
+        <button class="btn" id="expAll">Expand all</button>
+        <button class="btn" id="colAll">Collapse all</button>
+        <span class="note" id="treeNote"></span>
+      </div>
+      <div class="treebox"><ul class="tree" id="tree"></ul><div id="orphans"></div></div>
+    </div>
+  </main>
+
+  <footer id="foot">Prototype with made-up people. Live, this list comes from Entra ID through Microsoft Graph and you sign in with your emh account.</footer>
+</div>
+
+<script>
+/* ---------- Data source ----------
+   Deployed on Azure Static Web Apps: /.auth/me says who is signed in, /api/people returns the staff list from Graph.
+   Anywhere else (this preview): falls back to the sample people below. */
+const SAMPLE = [
+ ["ceo","Helen Marsh","Chief Executive","Executive Office","Leicester",null],
+ ["dh","David Okafor","Executive Director of Housing","Housing","Leicester","ceo"],
+ ["da","Rachel Lindqvist","Executive Director of Assets & Repairs","Assets & Repairs","Melton","ceo"],
+ ["df","Imran Shah","Executive Director of Finance & Resources","Finance & Resources","Leicester","ceo"],
+ ["dp","Claire Bennett","Director of People & Culture","People & Culture","Leicester","ceo"],
+ ["ea","Joanne Pickering","Executive Assistant to the CEO","Executive Office","Leicester","ceo"],
+ ["hn","Tom Wheeler","Head of Neighbourhoods","Housing","Leicester","dh"],
+ ["hi","Priya Mistry","Head of Income & Tenancy Sustainment","Housing","Leicester","dh"],
+ ["hs","Gareth Lewis","Head of Supported Housing","Housing","Nottingham","dh"],
+ ["n1","Amy Fletcher","Neighbourhood Manager (North)","Housing","Loughborough","hn"],
+ ["n2","Kwame Asante","Neighbourhood Manager (South)","Housing","Leicester","hn"],
+ ["n3","Sophie Turner","Neighbourhood Officer","Housing","Loughborough","n1"],
+ ["n4","Liam Doyle","Neighbourhood Officer","Housing","Loughborough","n1"],
+ ["n5","Fatima Begum","Neighbourhood Officer","Housing","Leicester","n2"],
+ ["i1","Mark Ellis","Income Team Leader","Housing","Leicester","hi"],
+ ["i2","Hannah Price","Income Officer","Housing","Leicester","i1"],
+ ["i3","Daniel Kowalski","Money Advice Officer","Housing","Leicester","i1"],
+ ["s1","Natalie Brooks","Scheme Manager","Housing","Nottingham","hs"],
+ ["ar","Simon Hart","Head of Repairs","Assets & Repairs","Melton","da"],
+ ["ac","Lucy Chambers","Head of Building Safety & Compliance","Assets & Repairs","Melton","da"],
+ ["ai","Oliver Grant","Head of Asset Investment","Assets & Repairs","Melton","da"],
+ ["r1","Paul Henderson","Repairs Manager","Assets & Repairs","Melton","ar"],
+ ["r2","Ben Cartwright","Repairs Planner","Assets & Repairs","Melton","r1"],
+ ["r3","Aisha Rahman","Damp & Mould Surveyor","Assets & Repairs","Melton","r1"],
+ ["r4","Chris Moran","Multi-trade Operative Supervisor","Assets & Repairs","Melton","r1"],
+ ["c1","Emma Walsh","Gas & Electrical Compliance Manager","Assets & Repairs","Melton","ac"],
+ ["c2","Jordan Reid","Fire Safety Officer","Assets & Repairs","Melton","ac"],
+ ["c3","Megan Hall","Compliance Administrator","Assets & Repairs","Melton","c1"],
+ ["a1","Ravi Patel","Stock Condition Surveyor","Assets & Repairs","Melton","ai"],
+ ["hf","Karen Doherty","Head of Finance","Finance & Resources","Leicester","df"],
+ ["ht","Alex Morgan","Head of ICT","Finance & Resources","Leicester","df"],
+ ["hg","Ruth Adeyemi","Head of Governance","Finance & Resources","Leicester","df"],
+ ["f1","Steven Clarke","Financial Accountant","Finance & Resources","Leicester","hf"],
+ ["f2","Zoe Mitchell","Management Accountant","Finance & Resources","Leicester","hf"],
+ ["t1","Jamie Fox","Operations Manager (Service Desk)","ICT","Leicester","ht"],
+ ["t2","Nadia Hussain","Solutions Manager","ICT","Leicester","ht"],
+ ["t3","Peter Lawson","Data & Insights Manager","ICT","Leicester","ht"],
+ ["t4","Grace Kim","Quality Manager","ICT","Leicester","ht"],
+ ["t5","Ryan Shaw","Service Desk Analyst","ICT","Leicester","t1"],
+ ["t6","Ella Dunn","Infrastructure Engineer","ICT","Leicester","t1"],
+ ["t7","Marcus Webb","Business Analyst","ICT","Leicester","t2"],
+ ["t8","Holly Grant","Power Platform Developer","ICT","Leicester","t2"],
+ ["t9","Sam Iqbal","BI Developer","ICT","Leicester","t3"],
+ ["t10","Laura Finch","Data Protection Advisor","ICT","Leicester","t4"],
+ ["g1","Victoria Stone","Company Secretary","Finance & Resources","Leicester","hg"],
+ ["p1","Andrew Bell","HR Business Partner","People & Culture","Leicester","dp"],
+ ["p2","Charlotte Ng","Learning & Development Lead","People & Culture","Leicester","dp"],
+ ["p3","Lewis Burton","HR Advisor","People & Culture","Leicester","p1"],
+ ["p4","Isabel Cruz","Recruitment Coordinator","People & Culture","Leicester","p1"],
+ ["x1","Kieran Walsh","Customer Insight Analyst","Customer Experience","Leicester",null],
+ ["x2","Bethany Cole","Complaints Officer","Customer Experience","Leicester",null]
+].map(([id,name,title,dept,office,mgr])=>{const m=name.toLowerCase().replace(/[^a-z ]/g,"").split(" ").join(".")+"@example.org";
+  return {id,name,title,dept,office,mgr,mail:m,upn:m}});
+const SAMPLE_ME="ht";
+
+let P=[],byId={},kidsOf={},meId=null,current=null,view="person",isSample=false;
+const $=id=>document.getElementById(id);
+const initials=n=>n.split(/\s+/).filter(Boolean).map(w=>w[0]).slice(0,2).join("").toUpperCase();
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const kids=id=>kidsOf[id]||[];
+const smooth=()=>matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth";
+
+async function getJSON(url){const r=await fetch(url,{credentials:"same-origin"});if(!r.ok)throw new Error(r.status);return r.json()}
+
+async function load(){
+  let principal=null,onSWA=false;
+  try{const me=await getJSON("/.auth/me");if(me&&"clientPrincipal" in me){onSWA=true;principal=me.clientPrincipal}}catch(e){}
+  if(onSWA){
+    try{P=await getJSON("/api/people")}
+    catch(e){$("focus").innerHTML=`<p class="none">The staff list didn't load. Refresh the page. If it still doesn't load, contact the ICT Service Desk.</p>`;return}
+    const who=(principal?.userDetails||"").toLowerCase();
+    meId=P.find(p=>(p.upn||"").toLowerCase()===who||(p.mail||"").toLowerCase()===who)?.id||null;
+    $("foot").textContent=`${P.length} people, from Entra ID. If your details or manager are wrong, ask HR to update them.`;
+  }else{
+    isSample=true;P=SAMPLE;meId=SAMPLE_ME;$("samplePill").hidden=false;
+  }
+  index();
+  const me=byId[meId];
+  $("who").textContent=me?`Signed in as ${me.name}${isSample?" (sample)":""}`:"";
+  $("meBtn").disabled=!me;
+  const h=decodeURIComponent((location.hash||"").slice(1));
+  show(byId[h]?h:(meId||topId()),false);
+}
+
+function index(){
+  byId=Object.fromEntries(P.map(p=>[p.id,p]));
+  kidsOf={};
+  P.forEach(p=>{if(p.mgr&&!byId[p.mgr])p.mgr=null;if(p.mgr)(kidsOf[p.mgr]??=[]).push(p)});
+  Object.values(kidsOf).forEach(a=>a.sort((x,y)=>x.name.localeCompare(y.name)));
+}
+const countAll=id=>kids(id).reduce((n,k)=>n+1+countAll(k.id),0);
+// The top of the organisation is the person with no manager who has the most people under them
+function roots(){return P.filter(p=>!p.mgr)}
+function topId(){return roots().sort((a,b)=>countAll(b.id)-countAll(a.id))[0]?.id}
+
+/* ---------- Person view ---------- */
+function card(p){
+  const n=kids(p.id).length;
+  return `<button class="card" data-id="${esc(p.id)}"><span class="av">${initials(p.name)}</span>
+    <span class="meta"><div class="n">${esc(p.name)}</div><div class="r">${esc(p.title)}</div></span>
+    ${n?`<span class="cnt">${n} report${n>1?"s":""}</span>`:""}</button>`;
+}
+function show(id,push=true){
+  const p=byId[id];if(!p)return;current=id;
+  const chain=[];let m=byId[p.mgr];while(m&&chain.length<30){chain.unshift(m);m=byId[m.mgr]}
+  $("trail").innerHTML=chain.length
+    ? chain.map(c=>`<button data-id="${esc(c.id)}">${esc(c.name)}</button><span class="sep">›</span>`).join("")+`<span>${esc(p.name)}</span>`
+    : (p.id===topId()?`<span>Top of the organisation</span>`:`<span>No manager recorded</span>`);
+  const mgr=byId[p.mgr];
+  $("focus").innerHTML=`<span class="av">${initials(p.name)}</span><div class="info">
+    <h2>${esc(p.name)}${p.id===meId?`<span class="you">You</span>`:""}</h2><div class="role">${esc(p.title)||"No job title recorded"}</div>
+    <dl class="facts">
+      <div><dt>Team</dt><dd>${esc(p.dept)||"—"}</dd></div>
+      <div><dt>Office</dt><dd>${esc(p.office)||"—"}</dd></div>
+      <div><dt>Reports to</dt><dd>${mgr?`<button data-id="${esc(mgr.id)}">${esc(mgr.name)}</button>`:"—"}</dd></div>
+      <div><dt>Email</dt><dd>${p.mail?`<span id="mail">${esc(p.mail)}</span><button class="copy" id="copy">Copy</button>`:"—"}</dd></div>
+    </dl></div>`;
+  const r=kids(p.id);
+  $("rc").textContent=r.length||"";
+  $("reports").innerHTML=r.length?r.map(card).join(""):`<p class="none">No direct reports.</p>`;
+  const peers=p.mgr?kids(p.mgr).filter(x=>x.id!==p.id):[];
+  $("peersSec").hidden=!peers.length;$("pc").textContent=peers.length||"";$("peers").innerHTML=peers.map(card).join("");
+  setView("person");
+  if(push){try{history.replaceState(null,"","#"+encodeURIComponent(p.id))}catch(e){}}
+  window.scrollTo({top:0,behavior:smooth()});
+}
+
+/* ---------- Tree view ---------- */
+let treeBuilt=false;
+function node(p){
+  const k=kids(p.id),me=p.id===meId?" me":"";
+  const row=`<span class="tn" role="button" tabindex="0" data-id="${esc(p.id)}">${esc(p.name)}</span><span class="tt">${esc(p.title)}</span>`;
+  if(!k.length) return `<li><div class="row${me}" data-row="${esc(p.id)}"><span class="leafpad"></span>${row}</div></li>`;
+  return `<li><details data-node="${esc(p.id)}"><summary class="row${me}" data-row="${esc(p.id)}">
+    <span class="chev" aria-hidden="true"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M3 1.5 6.5 5 3 8.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+    ${row}<span class="cnt" title="Everyone in this part of the organisation">${countAll(p.id)}</span></summary>
+    <ul>${k.map(node).join("")}</ul></details></li>`;
+}
+function buildTree(){
+  const top=byId[topId()];if(!top)return;
+  $("tree").innerHTML=node(top);
+  const orph=roots().filter(p=>p.id!==top.id).sort((a,b)=>a.name.localeCompare(b.name));
+  $("orphans").innerHTML=orph.length?`<div class="orphans"><p class="head">${orph.length} ${orph.length>1?"people have":"person has"} no manager in Entra ID, so they sit outside the chart</p><ul class="tree">${orph.map(node).join("")}</ul></div>`:"";
+  // Open the first two levels
+  const d=$("tree").querySelector("details");if(d){d.open=true}
+  $("treeNote").textContent=`${P.length} people · counts show everyone below each manager`;
+  treeBuilt=true;
+}
+function reveal(id){
+  if(!treeBuilt)buildTree();
+  document.querySelectorAll(".row.hit").forEach(r=>r.classList.remove("hit"));
+  let p=byId[id];const chain=[];let m=byId[p?.mgr];while(m){chain.push(m.id);m=byId[m.mgr]}
+  chain.forEach(a=>{const d=document.querySelector(`details[data-node="${CSS.escape(a)}"]`);if(d)d.open=true});
+  const row=document.querySelector(`[data-row="${CSS.escape(id)}"]`);
+  if(row){row.classList.add("hit");row.scrollIntoView({block:"center",behavior:smooth()})}
+}
+function setView(v){
+  view=v;
+  $("personView").hidden=v!=="person";$("treeView").hidden=v!=="tree";
+  $("vPerson").setAttribute("aria-pressed",v==="person");$("vTree").setAttribute("aria-pressed",v==="tree");
+  $("wrap").classList.toggle("wide",v==="tree");
+  if(v==="tree"&&!treeBuilt)buildTree();
+}
+$("vPerson").onclick=()=>current?show(current):setView("person");
+$("vTree").onclick=()=>{setView("tree");if(current)reveal(current)};
+$("expAll").onclick=()=>document.querySelectorAll("#treeView details").forEach(d=>d.open=true);
+$("colAll").onclick=()=>{document.querySelectorAll("#treeView details").forEach(d=>d.open=false);const d=$("tree").querySelector("details");if(d)d.open=true};
+$("meBtn").onclick=()=>{if(!meId)return;view==="tree"?(current=meId,reveal(meId)):show(meId)};
+
+/* ---------- Clicks ---------- */
+document.addEventListener("click",e=>{
+  const c=e.target.closest("#copy");
+  if(c){const t=$("mail").textContent;
+    Promise.resolve(navigator.clipboard?.writeText(t)).then(()=>{c.textContent="Copied"},()=>getSelection().selectAllChildren($("mail")));return}
+  const tn=e.target.closest(".tn");
+  if(tn){e.preventDefault();show(tn.dataset.id);return}
+  const b=e.target.closest("[data-id]");
+  if(b&&!b.closest("#results"))show(b.dataset.id);
+});
+document.addEventListener("keydown",e=>{
+  const tn=e.target.closest?.(".tn");
+  if(tn&&(e.key==="Enter"||e.key===" ")){e.preventDefault();show(tn.dataset.id)}
+});
+
+/* ---------- Search: name, job title or team; every word must match ---------- */
+const q=$("q"),res=$("results"),combo=$("combo");let hits=[],sel=0;
+function hl(text,terms){let out=esc(text);terms.forEach(t=>{out=out.replace(new RegExp("("+esc(t).replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+")","ig"),"<mark>$1</mark>")});return out}
+function search(){
+  const terms=q.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if(!terms.length){res.hidden=true;combo.setAttribute("aria-expanded","false");return}
+  hits=P.filter(p=>{const h=(p.name+" "+(p.title||"")+" "+(p.dept||"")).toLowerCase();return terms.every(t=>h.includes(t))})
+    .sort((a,b)=>(+!a.name.toLowerCase().includes(terms[0]))-(+!b.name.toLowerCase().includes(terms[0]))||a.name.localeCompare(b.name))
+    .slice(0,15);
+  sel=0;
+  res.innerHTML=hits.length?hits.map((p,i)=>`<li role="option" data-id="${esc(p.id)}" aria-selected="${i===0}">
+     <span class="av">${initials(p.name)}</span><span class="meta"><div class="n">${hl(p.name,terms)}</div>
+     <div class="r">${hl(p.title||"",terms)}${p.dept?" · "+hl(p.dept,terms):""}</div></span></li>`).join("")
+    :`<li class="empty">No one matches “${esc(q.value.trim())}”. Try a surname, a job title like “surveyor”, or a team.</li>`;
+  res.hidden=false;combo.setAttribute("aria-expanded","true");
+}
+function pick(id){
+  q.value="";res.hidden=true;combo.setAttribute("aria-expanded","false");q.blur();
+  if(view==="tree"){current=id;reveal(id)}else show(id);
+}
+function markSel(){[...res.querySelectorAll("li[data-id]")].forEach((li,i)=>{li.setAttribute("aria-selected",i===sel);if(i===sel)li.scrollIntoView({block:"nearest"})})}
+q.addEventListener("input",search);
+q.addEventListener("keydown",e=>{
+  if(res.hidden||!hits.length){if(e.key==="Escape"){q.value="";search()}return}
+  if(e.key==="ArrowDown"){sel=(sel+1)%hits.length;markSel();e.preventDefault()}
+  else if(e.key==="ArrowUp"){sel=(sel-1+hits.length)%hits.length;markSel();e.preventDefault()}
+  else if(e.key==="Enter"){pick(hits[sel].id);e.preventDefault()}
+  else if(e.key==="Escape"){q.value="";search()}
+});
+res.addEventListener("mousedown",e=>{const li=e.target.closest("li[data-id]");if(li){e.preventDefault();pick(li.dataset.id)}});
+q.addEventListener("blur",()=>setTimeout(()=>{res.hidden=true;combo.setAttribute("aria-expanded","false")},100));
+q.addEventListener("focus",search);
+document.addEventListener("keydown",e=>{if(e.key==="/"&&document.activeElement!==q&&!/input|textarea/i.test(document.activeElement?.tagName)){e.preventDefault();q.focus()}});
+
+load();
+</script>
+
+</body>
+</html>

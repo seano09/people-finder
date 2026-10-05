@@ -1,0 +1,10 @@
+{
+  "name": "people-finder-api",
+  "version": "1.0.0",
+  "private": true,
+  "main": "src/functions/*.js",
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "@azure/functions": "^4.5.0"
+  }
+}
