@@ -21,6 +21,8 @@ const EXCLUDE_UPN_CONTAINS = (process.env.EXCLUDE_UPN_CONTAINS || "")
 let cache = { at: 0, data: null };
 
 async function getToken() {
+  const missing = ["TENANT_ID", "AAD_CLIENT_ID", "AAD_CLIENT_SECRET"].filter(k => !process.env[k]);
+  if (missing.length) throw new Error(`Missing environment variable(s): ${missing.join(", ")}`);
   const body = new URLSearchParams({
     client_id: CLIENT_ID,
     client_secret: CLIENT_SECRET,
@@ -34,7 +36,7 @@ async function getToken() {
 
 async function getAllUsers(token) {
   const select = "id,displayName,jobTitle,department,officeLocation,mail,userPrincipalName,accountEnabled,userType";
-  let url = `https://graph.microsoft.com/v1.0/users?$select=${select}&$expand=manager($select=id)&$top=999`;
+  let url = `https://graph.microsoft.com/v1.0/users?$select=${select}&$expand=manager($select=id)&$top=100`;
   const users = [];
   while (url) {
     const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
@@ -96,7 +98,8 @@ app.http("people", {
       };
     } catch (err) {
       context.error(err);
-      return { status: 502, jsonBody: { error: "Could not load the staff list" } };
+      // The detail helps diagnose set-up problems (missing settings, consent not granted). It never contains the secret or token.
+      return { status: 502, jsonBody: { error: "Could not load the staff list", detail: String(err.message).slice(0, 600) } };
     }
   },
 });
