@@ -1,6 +1,6 @@
 // GET /api/people
 // Returns the staff list from Entra ID (Microsoft Graph) in the shape the People Finder page expects:
-//   [{ id, name, title, dept, office, mail, upn, mgr }]
+//   [{ id, name, title, dept, office, mail, upn, phone, mobile, mgr }]
 // Uses app-only access (client credentials) with the Graph application permissions:
 //   User.Read.All          – read users and their managers
 //   GroupMember.Read.All   – read the members of the "hide from People Finder" group (only needed if HIDDEN_GROUP_ID is set)
@@ -63,7 +63,7 @@ async function getAll(token, url, what) {
 }
 
 const getUsers = token => getAll(token,
-  "https://graph.microsoft.com/v1.0/users?$select=id,displayName,jobTitle,department,officeLocation,mail,userPrincipalName,accountEnabled,userType&$expand=manager($select=id)&$top=100",
+  "https://graph.microsoft.com/v1.0/users?$select=id,displayName,jobTitle,department,officeLocation,mail,userPrincipalName,businessPhones,mobilePhone,accountEnabled,userType&$expand=manager($select=id)&$top=100",
   "users");
 
 // If the hidden group is set but can't be read, this throws, so hidden people are never shown by mistake
@@ -112,6 +112,8 @@ function shape(users, hidden) {
     office: u.officeLocation || "",
     mail: u.mail || "",
     upn: u.userPrincipalName || "",
+    phone: (u.businessPhones || [])[0] || "",   // work number (Entra "Business phone")
+    mobile: u.mobilePhone || "",                 // Entra "Mobile phone"
     mgr: managerFor(u),
   }));
 }
