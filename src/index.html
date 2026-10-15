@@ -76,6 +76,8 @@ mark{background:var(--hit);color:inherit}
 .facts dt{font-family:var(--display);font-weight:600;font-size:.82rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
 .facts dd{margin:2px 0 0;overflow-wrap:anywhere}
 .facts dd button{font:inherit;font-weight:500;color:var(--red-text);background:none;border:0;padding:0;cursor:pointer;text-align:left}
+.facts dd a{color:var(--red-text);font-weight:500;text-decoration:none;overflow-wrap:anywhere}
+.facts dd a:hover{text-decoration:underline}
 .copy{font-size:.72rem;margin-left:8px;border:1px solid var(--line);background:var(--surface);color:var(--muted);padding:0 6px;cursor:pointer}
 .focus .info{min-width:0}
 section h3{font-family:var(--display);font-weight:600;font-size:1.15rem;text-transform:uppercase;letter-spacing:.03em;margin:0 0 10px;display:flex;gap:8px;align-items:baseline}
@@ -138,7 +140,8 @@ section h3 span{color:var(--red-text)}
 
 button:focus-visible,.card:focus-visible{outline:2px solid var(--red);outline-offset:2px}
 footer{font-size:.8rem;color:var(--muted)}
-@media (max-width:560px){.focus{grid-template-columns:1fr;padding:22px}.focus h2{font-size:1.7rem}.logo{height:42px}h1{font-size:1.6rem}.who{margin-left:0;width:100%}.ocbar .note{margin-left:0}}
+@media (max-width:560px){.wrap{gap:16px;padding-top:14px}.brand{padding-bottom:12px}.focus{grid-template-columns:1fr;padding:22px}.focus h2{font-size:1.7rem}.logo{height:42px}h1{font-size:1.6rem}.who{display:none}
+  .bar{gap:8px}.search{flex-basis:100%}#meBtn{flex:1}.seg{flex:2}.seg button{flex:1;padding:10px 8px}.ocbar .note{margin-left:0}.ocwrap{height:calc(100dvh - 210px);min-height:360px}}
 </style>
 
 <style>body{margin:0}[hidden]{display:none!important}</style>
@@ -245,8 +248,10 @@ const SAMPLE = [
  ["p4","Isabel Cruz","Recruitment Coordinator","People & Culture","Leicester","p1"],
  ["x1","Kieran Walsh","Customer Insight Analyst","Customer Experience","Leicester",null],
  ["x2","Bethany Cole","Complaints Officer","Customer Experience","Leicester",null]
-].map(([id,name,title,dept,office,mgr])=>{const m=name.toLowerCase().replace(/[^a-z ]/g,"").split(" ").join(".")+"@example.org";
-  return {id,name,title,dept,office,mgr,mail:m,upn:m}});
+].map(([id,name,title,dept,office,mgr],i)=>{const m=name.toLowerCase().replace(/[^a-z ]/g,"").split(" ").join(".")+"@example.org";
+  // Made-up numbers: everyone gets a work extension, roughly two in three a mobile
+  const phone=`0116 000 ${String(1000+i*7).slice(-4)}`,mobile=i%3===2?"":`07700 900${String(100+i).slice(-3)}`;
+  return {id,name,title,dept,office,mgr,mail:m,upn:m,phone,mobile}});
 const SAMPLE_ME="ht";
 
 let P=[],byId={},kidsOf={},totals={},meId=null,current=null,view="person",isSample=false,TOP=null;
@@ -256,6 +261,8 @@ const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&g
 const kids=id=>kidsOf[id]||[];
 const smooth=()=>matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth";
 const plural=(n,w)=>`${n} ${w}${n===1?"":"s"}`;
+// Keeps digits, + and the extension marker so "0116 123 4567 ext 12" still dials
+const telHref=s=>String(s).replace(/\s*(ext|x)\.?\s*(\d+)$/i,";ext=$2").replace(/[^\d+;=a-z]/g,"");
 
 async function getJSON(url){const r=await fetch(url,{credentials:"same-origin"});if(!r.ok)throw new Error(r.status);return r.json()}
 
@@ -312,7 +319,9 @@ function show(id,push=true){
       <div><dt>Team</dt><dd>${esc(p.dept)||"—"}</dd></div>
       <div><dt>Office</dt><dd>${esc(p.office)||"—"}</dd></div>
       <div><dt>Reports to</dt><dd>${mgr?`<button data-id="${esc(mgr.id)}">${esc(mgr.name)}</button>`:"—"}</dd></div>
-      <div><dt>Email</dt><dd>${p.mail?`<span id="mail">${esc(p.mail)}</span><button class="copy" id="copy">Copy</button>`:"—"}</dd></div>
+      <div><dt>Email</dt><dd>${p.mail?`<a id="mail" href="mailto:${esc(p.mail)}">${esc(p.mail)}</a><button class="copy" id="copy" data-copy="mail">Copy</button>`:"—"}</dd></div>
+      <div><dt>Phone</dt><dd>${p.phone?`<a id="phone" href="tel:${esc(telHref(p.phone))}">${esc(p.phone)}</a><button class="copy" data-copy="phone">Copy</button>`:"—"}</dd></div>
+      <div><dt>Mobile</dt><dd>${p.mobile?`<a id="mobile" href="tel:${esc(telHref(p.mobile))}">${esc(p.mobile)}</a><button class="copy" data-copy="mobile">Copy</button>`:"—"}</dd></div>
     </dl></div>`;
   const r=kids(p.id);
   $("rc").textContent=r.length||"";
@@ -399,9 +408,9 @@ $("meBtn").onclick=()=>{if(!meId)return;current=meId;view==="tree"?reveal(meId):
 
 /* Clicks */
 document.addEventListener("click",e=>{
-  const c=e.target.closest("#copy");
-  if(c){const t=$("mail").textContent;
-    Promise.resolve(navigator.clipboard?.writeText(t)).then(()=>{c.textContent="Copied"},()=>getSelection().selectAllChildren($("mail")));return}
+  const c=e.target.closest("[data-copy]");
+  if(c){const el=$(c.dataset.copy),t=el.textContent;
+    Promise.resolve(navigator.clipboard?.writeText(t)).then(()=>{c.textContent="Copied"},()=>getSelection().selectAllChildren(el));return}
   const tg=e.target.closest("[data-toggle]");
   if(tg){const id=tg.dataset.toggle;expanded.has(id)?expanded.delete(id):expanded.add(id);renderChart(id);return}
   const b=e.target.closest("[data-id]");
